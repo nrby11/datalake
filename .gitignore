@@ -172,6 +172,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-/terraform/.terraform.lock.hcl
-/terraform/.terraform.tfstate.lock.info
-/terraform/terraform.tfstate
+/infrastructre/terraform/.terraform.lock.hcl
+/infrastructre/terraform/.terraform.tfstate.lock.info
+/infrastructre/terraform/terraform.tfstate

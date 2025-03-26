@@ -32,21 +32,21 @@ locals {
     access_key_config = <<-EOT
       <property>
           <name>fs.s3a.access.key</name>
-          <value>${var.aws_access_key}</value>
+          <value>AKIA5QV57ZTOSESHYBIY</value>
       </property>
       <property>
           <name>fs.s3a.secret.key</name>
-          <value>${var.aws_secret_key}</value>
+          <value>URbV7w24OOQcl1vmWloJ1o1mAMToXohCh1zvCEnj</value>
       </property>
     EOT
     spark_s3_config = <<-EOT
       # S3 configuration with access keys
-      # S3 configuration with access keys
       spark.hadoop.fs.s3a.endpoint=s3.amazonaws.com
       spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
-      spark.hadoop.fs.s3a.access.key=${var.aws_access_key}
-      spark.hadoop.fs.s3a.secret.key=${var.aws_secret_key}
+      spark.hadoop.fs.s3a.access.key=AKIA5QV57ZTOSESHYBIY
+      spark.hadoop.fs.s3a.secret.key=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
       spark.hadoop.fs.s3a.path.style.access=true
+
     EOT
     container_env = [
       {
@@ -60,17 +60,23 @@ locals {
     ]
   } : {
     access_key_config = <<-EOT
-      <property>
-          <name>fs.s3a.aws.credentials.provider</name>
-          <value>com.amazonaws.auth.WebIdentityTokenCredentialsProvider</value>
-      </property>
+        <property>
+          <name>fs.s3a.access.key</name>
+          <value>AKIA5QV57ZTOSESHYBIY</value>
+        </property>
+        <property>
+            <name>fs.s3a.secret.key</name>
+            <value>URbV7w24OOQcl1vmWloJ1o1mAMToXohCh1zvCEnj</value>
+        </property>
     EOT
     spark_s3_config = <<-EOT
       # S3 configuration with IAM role
       spark.hadoop.fs.s3a.endpoint=s3.amazonaws.com
       spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
-      spark.hadoop.fs.s3a.aws.credentials.provider=com.amazonaws.auth.WebIdentityTokenCredentialsProvider
       spark.hadoop.fs.s3a.path.style.access=true
+      spark.hadoop.fs.s3a.access.key=AKIA5QV57ZTOSESHYBIY
+      spark.hadoop.fs.s3a.secret.key=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
+
     EOT
     container_env = []
   }
@@ -689,6 +695,93 @@ resource "kubernetes_deployment" "spark_history_server" {
         }
       }
     }
+  }
+}
+# Spark Service Account and Roles for Kubernetes
+resource "kubernetes_service_account" "spark_sa" {
+  metadata {
+    name      = "spark"
+    namespace = var.spark_namespace
+  }
+}
+
+resource "kubernetes_role" "spark_role" {
+  metadata {
+    name      = "spark-role"
+    namespace = var.spark_namespace
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["pods"]
+    verbs      = ["get", "list", "watch", "create", "delete"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["services"]
+    verbs      = ["get", "list", "watch", "create", "delete"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["configmaps"]
+    verbs      = ["get", "list", "create", "delete"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["persistentvolumeclaims"]
+    verbs      = ["get", "list", "watch", "create", "delete"]
+  }
+}
+
+resource "kubernetes_role_binding" "spark_role_binding" {
+  metadata {
+    name      = "spark-role-binding"
+    namespace = var.spark_namespace
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role.spark_role.metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account.spark_sa.metadata[0].name
+    namespace = var.spark_namespace
+  }
+}
+
+resource "kubernetes_cluster_role" "spark_cluster_role" {
+  metadata {
+    name = "spark-cluster-role"
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["nodes"]
+    verbs      = ["get", "list", "watch"]
+  }
+}
+
+resource "kubernetes_cluster_role_binding" "spark_cluster_role_binding" {
+  metadata {
+    name = "spark-cluster-role-binding"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role.spark_cluster_role.metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account.spark_sa.metadata[0].name
+    namespace = var.spark_namespace
   }
 }
 

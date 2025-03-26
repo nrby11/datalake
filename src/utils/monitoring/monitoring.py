@@ -1,11 +1,10 @@
+import json
 import logging
+import threading
 import time
-import os
 from contextlib import contextmanager
 from datetime import datetime
-import json
-import threading
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 

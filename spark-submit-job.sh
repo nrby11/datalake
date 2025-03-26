@@ -118,6 +118,8 @@ CONF_PARAMS=(
   "--conf" "spark.sql.adaptive.enabled=true"
   "--conf" "spark.sql.parquet.compression.codec=snappy"
   "--conf" "spark.kubernetes.file.upload.path=$FILE_UPLOAD_PATH"
+  "--conf" "spark.kubernetes.driver.podTemplateFile=driver-pod-template.yaml"
+
 )
 
 # Add any extra configurations passed via --conf
@@ -131,6 +133,7 @@ spark-submit \
   --deploy-mode $DEPLOY_MODE \
   --name "IcebergLogAnalytics" \
   "${CONF_PARAMS[@]}" \
+  --py-files datalake_project.zip \
   --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.2,org.apache.hadoop:hadoop-aws:3.3.4 \
   src/main.py \
   --input-path "$INPUT_PATH" \

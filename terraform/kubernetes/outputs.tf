@@ -15,24 +15,10 @@ output "usage_instructions" {
   value       = <<-EOT
     Your data lake is now fully deployed!
 
-    Accessing services:
-    ------------------
-    1. Forward Spark Master UI:
-       kubectl port-forward svc/spark-master 8080:8080 -n ${var.spark_namespace}
-       Then open http://localhost:8080 in your browser
-
-    2. Forward Spark History Server (if enabled):
-       kubectl port-forward svc/spark-history-server 18080:18080 -n ${var.spark_namespace}
-       Then open http://localhost:18080 in your browser
-
     Using Spark SQL with Iceberg:
-    ----------------------------
-    1. Submit a Spark job using kubectl:
-       kubectl run spark-shell --namespace=${var.spark_namespace} --rm -it \
-         --image=bitnami/spark:3.5.1 \
-         --command -- spark-shell --master spark://spark-master:7077
+    ----------------------------s
 
-    2. Inside spark-shell, create an Iceberg table:
+    Inside spark-shell, create an Iceberg table:
        ```scala
        spark.sql("CREATE TABLE hive.default.my_table (id INT, name STRING, value DOUBLE) USING iceberg")
        spark.sql("INSERT INTO hive.default.my_table VALUES (1, 'test', 123.45)")

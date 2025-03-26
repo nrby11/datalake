@@ -73,14 +73,12 @@ variable "aws_auth_method" {
 variable "aws_access_key" {
   description = "AWS access key (only if aws_auth_method = 'keys')"
   type        = string
-  default     = ""
   sensitive   = true
 }
 
 variable "aws_secret_key" {
   description = "AWS secret key (only if aws_auth_method = 'keys')"
   type        = string
-  default     = ""
   sensitive   = true
 }
 

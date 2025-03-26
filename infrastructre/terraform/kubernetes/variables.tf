@@ -103,7 +103,7 @@ variable "spark_worker_cores" {
 variable "enable_history_server" {
   description = "Whether to enable Spark History Server"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "tags" {

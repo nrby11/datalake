@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: spark-kubernetes-driver
+    volumeMounts:
+    - name: ivy-cache
+      mountPath: /home/spark/.ivy2
+  volumes:
+  - name: ivy-cache
+    emptyDir: {}

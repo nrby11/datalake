@@ -102,29 +102,6 @@ This guide walks you through deploying a data lake with Apache Spark, Hive Metas
    kubectl get pods -n spark
    ```
 
-## Accessing Your Data Lake
-
-1. Forward Spark UI to your local machine:
-   ```bash
-   kubectl port-forward svc/spark-master 8080:8080 -n spark
-   ```
-
-2. Open a web browser and navigate to: http://localhost:8080
-
-3. To run Spark SQL and interact with Iceberg tables:
-   ```bash
-   kubectl run spark-shell --namespace=spark --rm -it \
-     --image=bitnami/spark:3.5.1 \
-     --command -- spark-shell --master spark://spark-master:7077
-   ```
-
-4. Inside the spark-shell, create and query tables:
-   ```scala
-   spark.sql("CREATE TABLE hive.default.users (id INT, name STRING) USING iceberg")
-   spark.sql("INSERT INTO hive.default.users VALUES (1, 'Alice'), (2, 'Bob')")
-   spark.sql("SELECT * FROM hive.default.users").show()
-   ```
-
 ## Troubleshooting
 
 1. Check Hive Metastore logs:

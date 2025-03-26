@@ -31,7 +31,7 @@ variable "environment" {
 variable "spark_namespace" {
   description = "Kubernetes namespace for Spark resources"
   type        = string
-  default     = "spark"
+  default     = "default"
 }
 
 variable "s3_bucket_name" {

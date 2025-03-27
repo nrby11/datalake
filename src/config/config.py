@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 
 @dataclass
@@ -10,6 +11,12 @@ class Config:
     raw_table_name: str
     processed_table_name: str
     metastore_path: str = 's3a://terraform-20250326081517067100000004/hive/warehouse'
+
+    partition_strategy: str = "dynamic"  # Options: "dynamic", "hourly", "daily"
+    base_partitions: int = 2
+    max_partitions: int = 50
+    target_records_per_partition: int = 1000000  # Target 1M records per partition
+    custom_partition_expr: str = None  # For custom partitioning expressions
 
     @property
     def daily_ip_analytics_table(self):

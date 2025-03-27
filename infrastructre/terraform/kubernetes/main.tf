@@ -598,34 +598,13 @@ resource "kubernetes_deployment" "spark_worker" {
   }
 }
 
-# Create Spark History Server Service (conditional)
-resource "kubernetes_service" "spark_history_server" {
-  count = var.enable_history_server ? 1 : 0
-
-  depends_on = [kubernetes_deployment.spark_worker]
-
-  metadata {
-    name      = "spark-history-server"
-    namespace = var.spark_namespace
-  }
-
-  spec {
-    selector = {
-      app = "spark-history-server"
-    }
-
-    port {
-      port        = 18080
-      target_port = 18080
-    }
-  }
-}
-
 # Create Spark History Server Deployment (conditional)
 resource "kubernetes_deployment" "spark_history_server" {
   count = var.enable_history_server ? 1 : 0
 
-  depends_on = [kubernetes_service.spark_history_server]
+  # The deployment should depend on the service, not the other way around
+  # Also, this would create a circular dependency, so remove it
+  # depends_on = [kubernetes_service.spark_history_server]
 
   metadata {
     name      = "spark-history-server"
@@ -660,17 +639,24 @@ resource "kubernetes_deployment" "spark_history_server" {
             container_port = 18080
           }
 
+          # Fix the environment variables section - Terraform expects a list of objects
           env {
-            name  = "SPARK_HISTORY_OPTS"
-            value = "-Dspark.history.fs.logDirectory=s3a://${var.s3_bucket_name}/spark-history"
+            name  = "SPARK_NO_DAEMONIZE"
+            value = "true"
           }
 
-          # Add AWS credentials if using key-based auth
-          dynamic "env" {
-            for_each = local.aws_auth_config.container_env
-            content {
-              name  = env.value.name
-              value = env.value.value
+          env {
+            name  = "SPARK_HISTORY_OPTS"
+            value = "-Dspark.history.fs.logDirectory=s3a://${var.s3_bucket_name}/spark-history -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem -Dspark.hadoop.fs.defaultFS=file:/// -Dspark.hadoop.security.authentication=simple"
+          }
+          resources {
+            limits = {
+              cpu    = "1"
+              memory = "1Gi"
+            }
+            requests = {
+              cpu    = "500m"
+              memory = "512Mi"
             }
           }
 
@@ -685,6 +671,22 @@ resource "kubernetes_deployment" "spark_history_server" {
             mount_path = "/opt/bitnami/spark/conf/core-site.xml"
             sub_path   = "core-site.xml"
           }
+
+          # Add a local directory for event logs as a fallback
+          volume_mount {
+            name       = "spark-events"
+            mount_path = "/tmp/spark-events"
+          }
+
+          # Optional: Add liveness and readiness probes
+          liveness_probe {
+            http_get {
+              path = "/"
+              port = 18080
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+          }
         }
 
         volume {
@@ -693,10 +695,20 @@ resource "kubernetes_deployment" "spark_history_server" {
             name = kubernetes_config_map.spark_conf.metadata[0].name
           }
         }
+
+        # Add a local volume for event logs as a fallback
+        volume {
+          name = "spark-events"
+          empty_dir {}
+        }
+
+        # Consider adding a service account if needed for S3 access
+        # service_account_name = kubernetes_service_account.spark_service_account[0].metadata[0].name
       }
     }
   }
 }
+# Create Spark History Server Deployment (conditional)
 # Spark Service Account and Roles for Kubernetes
 resource "kubernetes_service_account" "spark_sa" {
   metadata {
@@ -713,26 +725,8 @@ resource "kubernetes_role" "spark_role" {
 
   rule {
     api_groups = [""]
-    resources  = ["pods"]
-    verbs      = ["get", "list", "watch", "create", "delete"]
-  }
-
-  rule {
-    api_groups = [""]
-    resources  = ["services"]
-    verbs      = ["get", "list", "watch", "create", "delete"]
-  }
-
-  rule {
-    api_groups = [""]
-    resources  = ["configmaps"]
-    verbs      = ["get", "list", "create", "delete"]
-  }
-
-  rule {
-    api_groups = [""]
-    resources  = ["persistentvolumeclaims"]
-    verbs      = ["get", "list", "watch", "create", "delete"]
+    resources  = ["*"]
+    verbs      = ["*"]
   }
 }
 

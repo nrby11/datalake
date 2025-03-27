@@ -1,6 +1,9 @@
 import logging
 
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import expr
+
+from config.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +44,7 @@ def create_spark_session(app_name="IcebergLogAnalytics", metastore_uri="thrift:/
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
         .config("spark.hadoop.fs.s3a.endpoint", "s3.amazonaws.com") \
-        .config("spark.executor.cores", "1") \
+        .config("spark.executor.cores", "4") \
         .config("spark.executor.instances", "2") \
         .config("spark.kubernetes.executor.request.cores", "256m") \
         .config("spark.hadoop.fs.s3a.access.key", "AKIA5QV57ZTOSESHYBIY") \
@@ -69,3 +72,56 @@ def stop_spark_session(spark):
         logger.info("Stopping Spark session")
         spark.stop()
         logger.info("Spark session stopped successfully")
+
+
+def optimize_partitioning(partition_columns, df, count_sample=None):
+    """
+    Optimize partitioning based on data volume and configured strategy.
+
+    Args:
+        df: DataFrame to partition
+        count_sample: Optional pre-computed count (to avoid counting large datasets)
+
+    Returns:
+        Optimally partitioned DataFrame
+    """
+    if count_sample is None:
+        # Sample 1% of data to estimate total size
+        sample_ratio = 0.01
+        row_count_estimate = df.sample(fraction=sample_ratio).count() / sample_ratio
+    else:
+        row_count_estimate = count_sample
+
+    logger.info(f"Estimated record count: {row_count_estimate:,}")
+
+    # Calculate optimal partition count based on strategy
+    if Config.partition_strategy == "dynamic":
+        # Dynamic strategy based on data volume
+        optimal_partitions = max(
+            Config.base_partitions,
+            min(
+                Config.max_partitions,
+                int(row_count_estimate / Config.target_records_per_partition)
+            )
+        )
+
+        logger.info(f"Using dynamic partitioning with {optimal_partitions} partitions")
+
+        # Use provided partition columns or default to process_date
+        partition_cols = partition_columns
+
+        # For high-volume data (>50M records), add hour-level partitioning
+        if row_count_estimate > 50000000 and "process_date" in partition_cols:
+            # Add hour-level partitioning for high volume
+            df = df.withColumn(
+                "process_hour",
+                expr("date_format(timestamp, 'HH')")
+            )
+            partition_cols = ["process_date", "process_hour"] + [
+                col for col in partition_cols if col != "process_date"
+            ]
+            logger.info(f"Added hour-level partitioning for high volume data")
+
+        # Repartition the DataFrame
+        return df.repartition(optimal_partitions, *partition_cols)
+

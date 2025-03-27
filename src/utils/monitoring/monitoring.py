@@ -121,6 +121,55 @@ def get_metrics_summary():
         }
 
 
+def analyze_physical_partition_skew(df):
+    """
+    Analyze data distribution across physical partitions.
+
+    Args:
+        df: Spark DataFrame to analyze
+    """
+    # Get current number of partitions
+    num_partitions = df.rdd.getNumPartitions()
+
+    # Count records per partition
+    partition_counts = df.rdd.mapPartitionsWithIndex(
+        lambda idx, iterator: [(idx, sum(1 for _ in iterator))],
+        preservesPartitioning=True
+    ).collect()
+
+    # Sort by count descending
+    partition_counts.sort(key=lambda x: x[1], reverse=True)
+
+    # Calculate statistics
+    counts = [count for _, count in partition_counts]
+    max_count = max(counts) if counts else 0
+    min_count = min(counts) if counts else 0
+    avg_count = sum(counts) / len(counts) if counts else 0
+    skew_ratio = max_count / avg_count if avg_count > 0 else 0
+
+    logger.info(f"Physical partition skew analysis:")
+    logger.info(f"Total partitions: {num_partitions}")
+    logger.info(f"Max records per partition: {max_count}")
+    logger.info(f"Min records per partition: {min_count}")
+    logger.info(f"Avg records per partition: {avg_count:.2f}")
+    logger.info(f"Skew ratio (max/avg): {skew_ratio:.2f}x")
+
+    if skew_ratio > 3:
+        logger.warning("Significant partition skew detected!")
+
+    # Log top 5 most loaded partitions
+    logger.info("Top 5 most loaded partitions:")
+    for idx, (partition_id, count) in enumerate(partition_counts[:5]):
+        logger.info(f"  Partition {partition_id}: {count} records ({count / avg_count:.2f}x avg)")
+
+    # Log bottom 5 least loaded partitions
+    logger.info("Bottom 5 least loaded partitions:")
+    for idx, (partition_id, count) in enumerate(partition_counts[-5:]):
+        logger.info(f"  Partition {partition_id}: {count} records ({count / avg_count:.2f}x avg)")
+
+    return partition_counts
+
+
 def print_metrics_summary():
     """
     Print a summary of metrics to the log.

@@ -3,6 +3,12 @@ import logging
 from pyspark.sql import SparkSession
 
 from config.config import Config
+from pyspark.sql.functions import expr
+
+from utils.monitoring.monitoring import \
+    analyze_physical_partition_skew
+
+from utils.spark_utils import optimize_partitioning
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +19,7 @@ class LogIngestion:
         self.config = config
 
         # Define regex patterns for log parsing
-        self.ip_pattern = r"^(\\S+)"  # Note the double backslashes for SQL string
+        self.ip_pattern = r"^(\\S+)"
         self.timestamp_pattern = r"\\[(\\d{2}/\\w{3}/\\d{4}:\\d{2}:\\d{2}:\\d{2} [+\\-]\\d{4})\\]"
         self.method_pattern = r'"(\\S+)'
         self.endpoint_pattern = r'"(?:\\S+)\\s+(\\S+)'
@@ -73,19 +79,43 @@ class LogIngestion:
         FROM extracted_fields
         """
 
-        self.spark.sql(timestamp_sql).createOrReplaceTempView("parsed_logs_temp")
-        drop_table = f"DROP TABLE IF EXISTS {self.config.raw_table_full_name}"
-        self.spark.sql(drop_table)
-        # Create or replace the raw logs table using Spark SQL
-        create_table_sql = f"""
-        CREATE OR REPLACE TABLE {self.config.raw_table_full_name}
-        USING iceberg
-        LOCATION '{self.config.raw_table_path}'
-        AS
-        SELECT * FROM parsed_logs_temp
-        """
+        parsed_logs_df = self.spark.sql(timestamp_sql)
+        parsed_logs_df.createOrReplaceTempView("parsed_logs_temp")
+        partition_columns = ["process_date"]
 
-        self.spark.sql(create_table_sql)
+        # Apply dynamic partitioning based on configuration
+        parsed_logs_df = optimize_partitioning(partition_columns, parsed_logs_df)
+
+
+        # analyze_physical_partition_skew(parsed_logs_df)
+
+        # Check if the table exists
+        table_exists = self.spark._jsparkSession.catalog().tableExists(
+            self.config.database_name,
+            self.config.raw_table_name
+        )
+
+        if not table_exists:
+            # Create the table with initial data
+            logger.info(f"Creating new table: {self.config.raw_table_full_name}")
+            parsed_logs_df.write \
+                .format("iceberg") \
+                .partitionBy("process_date") \
+                .option("write-format", "parquet") \
+                .saveAsTable(self.config.raw_table_full_name)
+        else:
+            # For existing table, use dynamic partition overwrite
+            logger.info(f"Writing to existing table with dynamic partition overwrite")
+
+            # Enable dynamic partition overwrite
+            self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+
+            parsed_logs_df.write \
+                .format("iceberg") \
+                .mode("overwrite") \
+                .option("overwrite-mode", "dynamic") \
+                .partitionBy("process_date") \
+                .saveAsTable(self.config.raw_table_full_name)
 
         # Count the records
         log_count = self.spark.sql(f"SELECT COUNT(*) as count FROM {self.config.raw_table_full_name}").collect()[0][

@@ -42,13 +42,13 @@ variable "s3_bucket_name" {
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t3.micro"
+  default     = "db.t1.micro"
 }
 
 variable "db_allocated_storage" {
   description = "Allocated storage for RDS in GB"
   type        = number
-  default     = 20
+  default     = 1
 }
 
 variable "db_username" {

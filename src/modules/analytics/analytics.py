@@ -21,9 +21,7 @@ class LogAnalytics:
         Read the processed logs and register a temporary view.
         """
         processed_logs = self.spark.table(self.config.processed_table_full_name)
-        partition_cols = ["process_date", "hour"]
-        processed_logs = optimize_partitioning(partition_cols, processed_logs)
-        processed_logs.createOrReplaceTempView("processed_logs")
+
         return processed_logs
 
     # --- Daily Analytics Functions ---
@@ -98,12 +96,22 @@ class LogAnalytics:
         logger.info(f"Daily top devices analytics saved to {self.config.daily_device_analytics_table}")
 
     @timeit
-    def run_daily_analytics(self):
+    def run_daily_analytics(self, cached_df= None):
         """
         Orchestrates the daily analytics by invoking IP and device analytics functions.
         """
         logger.info("Running daily analytics")
-        self.read_processed_logs()
+        if cached_df is not None:
+            logger.info("Using cached transformed logs")
+            processed_logs = cached_df
+        else:
+            logger.info("Reading processed logs from table")
+            processed_logs = self.spark.table(self.config.processed_table_full_name)
+
+        partition_cols = ["process_date", "hour"]
+        processed_logs = optimize_partitioning(partition_cols, processed_logs)
+        processed_logs.createOrReplaceTempView("processed_logs")
+
         self.run_daily_ip_analytics()
         self.run_daily_device_analytics()
         logger.info("Daily analytics completed successfully")
@@ -193,12 +201,21 @@ class LogAnalytics:
 
         logger.info(f"Weekly top devices analytics saved to {self.config.weekly_device_analytics_table}")
     @timeit
-    def run_weekly_analytics(self):
+    def run_weekly_analytics(self, cached_df):
         """
         Orchestrates the weekly analytics by invoking IP and device analytics functions.
         """
         logger.info("Running weekly analytics")
-        self.read_processed_logs()
+        if cached_df is not None:
+            logger.info("Using cached transformed logs")
+            processed_logs = cached_df
+        else:
+            logger.info("Reading processed logs from table")
+            processed_logs = self.spark.table(self.config.processed_table_full_name)
+        partition_cols = ["process_date", "hour"]
+        processed_logs = optimize_partitioning(partition_cols, processed_logs)
+        processed_logs.createOrReplaceTempView("processed_logs")
+
         self.run_weekly_ip_analytics()
         self.run_weekly_device_analytics()
         logger.info("Weekly analytics completed successfully")

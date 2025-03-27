@@ -108,3 +108,4 @@ class LogTransformation:
         transformed_logs = self.transform_columns(raw_logs, extract_device_udf)
         self.write_table(transformed_logs)
         self.count_records()
+        return transformed_logs

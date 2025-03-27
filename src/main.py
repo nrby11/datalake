@@ -68,12 +68,12 @@ def main():
 
         with monitor_query_performance("transformation"):
             logger.info("Starting log transformation")
-            transformation.transform_logs()
+            cached_df = transformation.transform_logs()
 
         with monitor_query_performance("analytics"):
             logger.info("Running analytics queries")
-            analytics.run_daily_analytics()
-            analytics.run_weekly_analytics()
+            analytics.run_daily_analytics(cached_df)
+            analytics.run_weekly_analytics(cached_df)
 
         logger.info("Pipeline completed successfully")
 

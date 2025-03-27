@@ -1,13 +1,13 @@
 import argparse
 import logging
 
-from analytics import LogAnalytics
-from log_ingestion import LogIngestion
-from log_transformation import LogTransformation
-from src.utils.monitoring.monitoring import monitor_query_performance
-from src.utils.spark_utils import create_spark_session, stop_spark_session
+from modules.analytics.analytics import LogAnalytics
+from modules.ingestion.log_ingestion import LogIngestion
+from modules.transformation.log_transformation import LogTransformation
+from utils.monitoring.monitoring import monitor_query_performance
+from utils.spark_utils import create_spark_session, stop_spark_session
 
-from config import Config
+from config.config import Config
 
 
 logging.basicConfig(

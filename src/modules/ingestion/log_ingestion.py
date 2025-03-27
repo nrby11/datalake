@@ -2,7 +2,7 @@ import logging
 
 from pyspark.sql import SparkSession
 
-from config import Config
+from config.config import Config
 
 logger = logging.getLogger(__name__)
 

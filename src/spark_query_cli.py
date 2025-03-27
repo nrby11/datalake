@@ -7,7 +7,7 @@ import argparse
 import json
 import logging
 
-from pandas import pd
+from pandas import pandas
 from pyspark.sql import SparkSession
 from tabulate import tabulate
 
@@ -136,12 +136,12 @@ class SparkQueryCLI:
 
         try:
             print("\n📊 === Daily Top 5 IP Addresses ===")
-            daily_ips = self.spark.table(self.config.daily_ip_analytics_table).limit(20)
+            daily_ips = self.spark.table(self.config.daily_ip_analytics_table).limit(5)
             daily_ips_pd = daily_ips.toPandas()
             print(tabulate(daily_ips_pd, headers='keys', tablefmt='psql', showindex=False))
 
             print("\n📊 === Daily Top 5 Devices ===")
-            daily_devices = self.spark.table(self.config.daily_device_analytics_table).limit(20)
+            daily_devices = self.spark.table(self.config.daily_device_analytics_table).limit(5)
             daily_devices_pd = daily_devices.toPandas()
             print(tabulate(daily_devices_pd, headers='keys', tablefmt='psql', showindex=False))
 

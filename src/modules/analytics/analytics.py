@@ -1,129 +1,136 @@
 import logging
 from pyspark.sql import SparkSession
-
 from config.config import Config
+
+from utils.spark_utils import optimize_partitioning
+
+from utils.utils import timeit
 
 logger = logging.getLogger(__name__)
 
 
 class LogAnalytics:
-    def __init__(self, spark: SparkSession, config: Config):
+    def __init__(self, spark: SparkSession, config: Config, iceberg):
         self.spark = spark
         self.config = config
+        self.iceberg = iceberg
 
-    def run_daily_analytics(self):
+    @timeit
+    def read_processed_logs(self):
         """
-        Run daily analytics:
-        - Top 5 IP addresses by request count
-        - Top 5 devices
+        Read the processed logs and register a temporary view.
         """
-        logger.info("Running daily analytics")
+        processed_logs = self.spark.table(self.config.processed_table_full_name)
+        partition_cols = ["process_date", "hour"]
+        processed_logs = optimize_partitioning(partition_cols, processed_logs)
+        processed_logs.createOrReplaceTempView("processed_logs")
+        return processed_logs
 
-        # Ensure processed logs table is accessible as a view
-        self.spark.sql(f"SELECT * FROM {self.config.processed_table_full_name}").createOrReplaceTempView(
-            "processed_logs")
-
-        drop_table = f"""DROP TABLE IF EXISTS {self.config.daily_ip_analytics_table}"""
-
-        self.spark.sql(drop_table)
-
-        # Daily Top 5 IP addresses using SQL window functions
-        daily_top_ips_sql = f"""
-        CREATE OR REPLACE TABLE {self.config.daily_ip_analytics_table}
-        USING iceberg
-        AS
+    # --- Daily Analytics Functions ---
+    @timeit
+    def run_daily_ip_analytics(self):
+        """
+        Compute daily top 5 IP addresses by request count and write to a table.
+        """
+        logger.info("Running daily IP analytics")
+        daily_top_ips_sql = """
         WITH ranked_ips AS (
             SELECT 
-                day,
+                process_date,
                 ip,
                 COUNT(*) AS request_count,
-                ROW_NUMBER() OVER (PARTITION BY day ORDER BY COUNT(*) DESC) as rank
+                ROW_NUMBER() OVER (PARTITION BY process_date ORDER BY COUNT(*) DESC) AS rank
             FROM processed_logs
-            GROUP BY day, ip
+            GROUP BY process_date, ip
         )
         SELECT 
-            day,
+            process_date,
             ip,
             request_count
         FROM ranked_ips
         WHERE rank <= 5
-        ORDER BY day, request_count DESC
+        ORDER BY process_date, request_count DESC
         """
+        daily_top_ips = self.spark.sql(daily_top_ips_sql)
 
-        # Execute the daily top IPs analytics
-        self.spark.sql(daily_top_ips_sql)
+        self.iceberg.write_to_iceberg_table(
+            df=daily_top_ips,
+            database_name=self.config.database_name,
+            table_name=self.config.daily_ip_analytics_table,
+            partition_columns=["process_date"]
+        )
 
         logger.info(f"Daily top IPs analytics saved to {self.config.daily_ip_analytics_table}")
 
-        drop_table = f"""DROP TABLE IF EXISTS {self.config.daily_device_analytics_table}"""
-
-        self.spark.sql(drop_table)
-        # Daily Top 5 devices using SQL window functions
-        daily_top_devices_sql = f"""
-        CREATE OR REPLACE TABLE {self.config.daily_device_analytics_table}
-        USING iceberg
-        AS
+    @timeit
+    def run_daily_device_analytics(self):
+        """
+        Compute daily top 5 devices by request count and write to a table.
+        """
+        logger.info("Running daily device analytics")
+        daily_top_devices_sql = """
         WITH ranked_devices AS (
             SELECT 
-                day,
+                process_date,
                 device_type,
                 COUNT(*) AS request_count,
-                ROW_NUMBER() OVER (PARTITION BY day ORDER BY COUNT(*) DESC) as rank
+                ROW_NUMBER() OVER (PARTITION BY process_date ORDER BY COUNT(*) DESC) AS rank
             FROM processed_logs
-            GROUP BY day, device_type
+            GROUP BY process_date, device_type
         )
         SELECT 
-            day,
+            process_date,
             device_type,
             request_count
         FROM ranked_devices
         WHERE rank <= 5
-        ORDER BY day, request_count DESC
+        ORDER BY process_date, request_count DESC
         """
+        daily_top_devices = self.spark.sql(daily_top_devices_sql)
 
-        # Execute the daily top devices analytics
-        self.spark.sql(daily_top_devices_sql)
+        self.iceberg.write_to_iceberg_table(
+            df=daily_top_devices,
+            database_name=self.config.database_name,
+            table_name=self.config.daily_device_analytics_table,
+            partition_columns=["process_date"]
+        )
 
         logger.info(f"Daily top devices analytics saved to {self.config.daily_device_analytics_table}")
+
+    @timeit
+    def run_daily_analytics(self):
+        """
+        Orchestrates the daily analytics by invoking IP and device analytics functions.
+        """
+        logger.info("Running daily analytics")
+        self.read_processed_logs()
+        self.run_daily_ip_analytics()
+        self.run_daily_device_analytics()
         logger.info("Daily analytics completed successfully")
 
-    def run_weekly_analytics(self):
+    # --- Weekly Analytics Functions ---
+    @timeit
+    def run_weekly_ip_analytics(self):
         """
-        Run weekly analytics:
-        - Top 5 IP addresses by request count
-        - Top 5 devices
+        Compute weekly top 5 IP addresses by request count and write to a table.
         """
-        logger.info("Running weekly analytics")
-
-        # Create a week identifier for analytics
-        weekly_logs_sql = """
-        CREATE OR REPLACE TEMPORARY VIEW weekly_logs AS
-        SELECT 
-            *,
-            CONCAT(YEAR(timestamp), '-', WEEKOFYEAR(timestamp)) AS year_week
-        FROM processed_logs
-        """
-
-        self.spark.sql(weekly_logs_sql)
-
-        # Weekly Top 5 IP addresses using SQL window functions
-
-        drop_table = f"""DROP TABLE IF EXISTS {self.config.weekly_ip_analytics_table}"""
-
-        self.spark.sql(drop_table)
-
-        weekly_top_ips_sql = f"""
-        CREATE OR REPLACE TABLE {self.config.weekly_ip_analytics_table}
-        USING iceberg
-        AS
-        WITH ranked_ips AS (
+        logger.info("Running weekly IP analytics")
+        weekly_top_ips_sql = """
+        WITH weekly_data AS (
+            SELECT 
+                CONCAT(YEAR(timestamp), '-', LPAD(CAST(WEEKOFYEAR(timestamp) AS STRING), 2, '0')) AS year_week,
+                ip,
+                COUNT(*) AS request_count
+            FROM processed_logs
+            GROUP BY year_week, ip
+        ),
+        ranked_ips AS (
             SELECT 
                 year_week,
                 ip,
-                COUNT(*) AS request_count,
-                ROW_NUMBER() OVER (PARTITION BY year_week ORDER BY COUNT(*) DESC) as rank
-            FROM weekly_logs
-            GROUP BY year_week, ip
+                request_count,
+                ROW_NUMBER() OVER (PARTITION BY year_week ORDER BY request_count DESC) AS rank
+            FROM weekly_data
         )
         SELECT 
             year_week,
@@ -133,25 +140,39 @@ class LogAnalytics:
         WHERE rank <= 5
         ORDER BY year_week, request_count DESC
         """
+        weekly_top_ips = self.spark.sql(weekly_top_ips_sql)
 
-        # Execute the weekly top IPs analytics
-        self.spark.sql(weekly_top_ips_sql)
+        self.iceberg.write_to_iceberg_table(
+            df=weekly_top_ips,
+            database_name=self.config.database_name,
+            table_name=self.config.weekly_ip_analytics_table,
+            partition_columns=["year_week"]
+        )
 
-        logger.info(f"Weekly top IPs analytics saved to {self.config.weekly_device_analytics_table}")
+        logger.info(f"Weekly top IPs analytics saved to {self.config.weekly_ip_analytics_table}")
 
-        # Weekly Top 5 devices using SQL window functions
-        weekly_top_devices_sql = f"""
-        CREATE OR REPLACE TABLE {self.config.weekly_device_analytics_table}
-        USING iceberg
-        AS
-        WITH ranked_devices AS (
+    @timeit
+    def run_weekly_device_analytics(self):
+        """
+        Compute weekly top 5 devices by request count and write to a table.
+        """
+        logger.info("Running weekly device analytics")
+        weekly_top_devices_sql = """
+        WITH weekly_data AS (
+            SELECT 
+                CONCAT(YEAR(timestamp), '-', LPAD(CAST(WEEKOFYEAR(timestamp) AS STRING), 2, '0')) AS year_week,
+                device_type,
+                COUNT(*) AS request_count
+            FROM processed_logs
+            GROUP BY year_week, device_type
+        ),
+        ranked_devices AS (
             SELECT 
                 year_week,
                 device_type,
-                COUNT(*) AS request_count,
-                ROW_NUMBER() OVER (PARTITION BY year_week ORDER BY COUNT(*) DESC) as rank
-            FROM weekly_logs
-            GROUP BY year_week, device_type
+                request_count,
+                ROW_NUMBER() OVER (PARTITION BY year_week ORDER BY request_count DESC) AS rank
+            FROM weekly_data
         )
         SELECT 
             year_week,
@@ -161,31 +182,47 @@ class LogAnalytics:
         WHERE rank <= 5
         ORDER BY year_week, request_count DESC
         """
+        weekly_top_devices = self.spark.sql(weekly_top_devices_sql)
 
-        # Execute the weekly top devices analytics
-        self.spark.sql(weekly_top_devices_sql)
+        self.iceberg.write_to_iceberg_table(
+            df=weekly_top_devices,
+            database_name=self.config.database_name,
+            table_name=self.config.weekly_device_analytics_table,
+            partition_columns=["year_week"]
+        )
 
         logger.info(f"Weekly top devices analytics saved to {self.config.weekly_device_analytics_table}")
+    @timeit
+    def run_weekly_analytics(self):
+        """
+        Orchestrates the weekly analytics by invoking IP and device analytics functions.
+        """
+        logger.info("Running weekly analytics")
+        self.read_processed_logs()
+        self.run_weekly_ip_analytics()
+        self.run_weekly_device_analytics()
         logger.info("Weekly analytics completed successfully")
+
+    # --- Display Function ---
 
     def display_results(self):
         """
-        Display the results of the analytics for reference
+        Display the analytics results for daily and weekly top IPs and devices.
         """
         logger.info("Displaying analytics results")
 
-        # Display daily top IPs
         logger.info("=== Daily Top 5 IP Addresses ===")
-        self.spark.sql(f"SELECT * FROM {self.config.daily_ip_analytics_table}").show()
+        daily_top_ips = self.spark.table(self.config.daily_ip_analytics_table)
+        daily_top_ips.show()
 
-        # Display daily top devices
         logger.info("=== Daily Top 5 Devices ===")
-        self.spark.sql(f"SELECT * FROM {self.config.daily_device_analytics_table}").show()
+        daily_top_devices = self.spark.table(self.config.daily_device_analytics_table)
+        daily_top_devices.show()
 
-        # Display weekly top IPs
         logger.info("=== Weekly Top 5 IP Addresses ===")
-        self.spark.sql(f"SELECT * FROM {self.config.weekly_ip_analytics_table}").show()
+        weekly_top_ips = self.spark.table(self.config.weekly_ip_analytics_table)
+        weekly_top_ips.show()
 
-        # Display weekly top devices
         logger.info("=== Weekly Top 5 Devices ===")
-        self.spark.sql(f"SELECT * FROM {self.config.weekly_device_analytics_table}").show()
+        weekly_top_devices = self.spark.table(self.config.weekly_device_analytics_table)
+        weekly_top_devices.show()

@@ -1,20 +1,17 @@
+import time
 import logging
-
 from pyspark.sql import SparkSession
-
 from config.config import Config
 from pyspark.sql.functions import expr
-
-from utils.monitoring.monitoring import \
-    analyze_physical_partition_skew
-
+from utils.monitoring.monitoring import analyze_physical_partition_skew
 from utils.spark_utils import optimize_partitioning
+from utils.utils import timeit
 
 logger = logging.getLogger(__name__)
 
-
 class LogIngestion:
-    def __init__(self, spark: SparkSession, config: Config):
+    def __init__(self, spark: SparkSession, config: Config, iceberg):
+        self.iceberg = iceberg
         self.spark = spark
         self.config = config
 
@@ -28,6 +25,7 @@ class LogIngestion:
         self.bytes_pattern = r"\\s(\\d+)\\s"
         self.user_agent_pattern = r'"([^"]*)"$'
 
+    @timeit
     def extract_log_fields(self):
         """
         Extract fields from raw logs using regexp_extract.
@@ -53,72 +51,67 @@ class LogIngestion:
 
         # Extract the basic fields
         extracted_df.createOrReplaceTempView("extracted_fields")
-
         return extracted_df
 
-    def ingest_logs(self):
-        """
-        Ingest raw logs from S3 into a temporary table.
-        The logs are in the format:
-        184.87.250.135 - - [06/Nov/2024:23:20:37 +0000] "GET /Integrated/challenge.gif HTTP/1.1" 200 2344 "-" "Mozilla/5.0 (Macintosh; PPC Mac OS X 10_7_2) AppleWebKit/5310 (KHTML, like Gecko) Chrome/39.0.897.0 Mobile Safari/5310"
-        """
-        logger.info(f"Ingesting logs from {self.config.input_path}")
-
-        # Create database if not exists
+    @timeit
+    def create_database(self):
+        """Creates the database if it does not exist."""
         self.spark.sql(f"CREATE DATABASE IF NOT EXISTS {self.config.database_name}")
 
-        # Extract fields from the raw logs
-        self.extract_log_fields()
-
-        # Process the extracted fields to add timestamp and date
+    @timeit
+    def process_parsed_logs(self):
+        """
+        Process the extracted fields to add timestamp and date fields.
+        Returns a DataFrame with parsed logs.
+        """
         timestamp_sql = """
         SELECT
             *,
             to_timestamp(timestamp_str, 'dd/MMM/yyyy:HH:mm:ss Z') AS timestamp,
-            date_format(to_timestamp(timestamp_str, 'dd/MMM/yyyy:HH:mm:ss Z'), 'yyyy-MM-dd') AS process_date
+            date_format(to_timestamp(timestamp_str, 'dd/MMM/yyyy:HH:mm:ss Z'), 'yyyy-MM-dd') AS process_date,
+            date_format(to_timestamp(timestamp_str, 'dd/MMM/yyyy:HH:mm:ss Z'), 'HH') AS hour
         FROM extracted_fields
         """
-
         parsed_logs_df = self.spark.sql(timestamp_sql)
         parsed_logs_df.createOrReplaceTempView("parsed_logs_temp")
-        partition_columns = ["process_date"]
 
-        # Apply dynamic partitioning based on configuration
+        partition_columns = ["process_date", "hour"]
         parsed_logs_df = optimize_partitioning(partition_columns, parsed_logs_df)
+        return parsed_logs_df
 
+    @timeit
+    def write_table(self, parsed_logs_df):
+        """
+        Write the parsed logs to the target table.
+        Uses dynamic partition overwrite if the table already exists.
+        """
 
-        # analyze_physical_partition_skew(parsed_logs_df)
-
-        # Check if the table exists
-        table_exists = self.spark._jsparkSession.catalog().tableExists(
-            self.config.database_name,
-            self.config.raw_table_name
+        # Write to table using the common utility
+        self.iceberg.write_to_iceberg_table(
+            df=parsed_logs_df,
+            database_name=self.config.database_name,
+            table_name=self.config.raw_table_full_name,
+            partition_columns=["process_date", "hour"]
         )
 
-        if not table_exists:
-            # Create the table with initial data
-            logger.info(f"Creating new table: {self.config.raw_table_full_name}")
-            parsed_logs_df.write \
-                .format("iceberg") \
-                .partitionBy("process_date") \
-                .option("write-format", "parquet") \
-                .saveAsTable(self.config.raw_table_full_name)
-        else:
-            # For existing table, use dynamic partition overwrite
-            logger.info(f"Writing to existing table with dynamic partition overwrite")
-
-            # Enable dynamic partition overwrite
-            self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
-
-            parsed_logs_df.write \
-                .format("iceberg") \
-                .mode("overwrite") \
-                .option("overwrite-mode", "dynamic") \
-                .partitionBy("process_date") \
-                .saveAsTable(self.config.raw_table_full_name)
-
-        # Count the records
-        log_count = self.spark.sql(f"SELECT COUNT(*) as count FROM {self.config.raw_table_full_name}").collect()[0][
-            "count"]
-
+    @timeit
+    def count_logs(self):
+        """Count the number of logs ingested into the target table."""
+        count_df = self.spark.sql(f"SELECT COUNT(*) as count FROM {self.config.raw_table_full_name}")
+        log_count = count_df.collect()[0]["count"]
         logger.info(f"Successfully ingested {log_count} logs")
+        return log_count
+
+    @timeit
+    def ingest_logs(self):
+        """
+        Ingest raw logs from S3 into the target table.
+        This function orchestrates the process by calling smaller functions.
+        """
+        logger.info(f"Ingesting logs from {self.config.input_path}")
+
+        self.create_database()
+        self.extract_log_fields()
+        parsed_logs_df = self.process_parsed_logs()
+        self.write_table(parsed_logs_df)
+        self.count_logs()

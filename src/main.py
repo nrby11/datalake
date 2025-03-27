@@ -4,11 +4,11 @@ import logging
 from modules.analytics.analytics import LogAnalytics
 from modules.ingestion.log_ingestion import LogIngestion
 from modules.transformation.log_transformation import LogTransformation
+from utils.iceberg_utils import IcebergTableUtils
 from utils.monitoring.monitoring import monitor_query_performance
 from utils.spark_utils import create_spark_session, stop_spark_session
 
 from config.config import Config
-
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -53,12 +53,13 @@ def main():
     # Initialize Spark session
     logger.info("Initializing Spark session")
     spark = create_spark_session()
+    iceberg = IcebergTableUtils(spark)
 
     try:
         # Initialize modules
-        ingestion = LogIngestion(spark, config)
-        transformation = LogTransformation(spark, config)
-        analytics = LogAnalytics(spark, config)
+        ingestion = LogIngestion(spark, config, iceberg)
+        transformation = LogTransformation(spark, config, iceberg)
+        analytics = LogAnalytics(spark, config, iceberg)
 
         # Execute pipeline
         with monitor_query_performance("ingestion"):

@@ -44,7 +44,7 @@ def create_spark_session(app_name="IcebergLogAnalytics", metastore_uri="thrift:/
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
         .config("spark.hadoop.fs.s3a.endpoint", "s3.amazonaws.com") \
-        .config("spark.executor.cores", "4") \
+        .config("spark.executor.cores", "2") \
         .config("spark.executor.instances", "2") \
         .config("spark.kubernetes.executor.request.cores", "256m") \
         .config("spark.hadoop.fs.s3a.access.key", "AKIA5QV57ZTOSESHYBIY") \

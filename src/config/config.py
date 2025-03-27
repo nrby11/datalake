@@ -9,6 +9,7 @@ class Config:
     database_name: str
     raw_table_name: str
     processed_table_name: str
+    metastore_path: str = 's3a://terraform-20250326081517067100000004/hive/warehouse'
 
     @property
     def daily_ip_analytics_table(self):
@@ -28,11 +29,11 @@ class Config:
 
     @property
     def raw_table_path(self):
-        return f"{self.output_path}/{self.raw_table_name}"
+        return f"{self.metastore_path}/{self.raw_table_name}"
 
     @property
     def processed_table_path(self):
-        return f"{self.output_path}/{self.processed_table_name}"
+        return f"{self.metastore_path}/{self.processed_table_name}"
 
     @property
     def raw_table_full_name(self):

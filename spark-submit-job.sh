@@ -5,7 +5,7 @@
 # Default values
 INPUT_PATH=""
 OUTPUT_PATH=""
-CATALOG_NAME="hive_catalog"
+CATALOG_NAME="hive"
 DATABASE_NAME="logs_db"
 RAW_TABLE="raw_logs"
 PROCESSED_TABLE="processed_logs"
@@ -119,7 +119,10 @@ CONF_PARAMS=(
   "--conf" "spark.sql.parquet.compression.codec=snappy"
   "--conf" "spark.kubernetes.file.upload.path=$FILE_UPLOAD_PATH"
   "--conf" "spark.kubernetes.driver.podTemplateFile=driver-pod-template.yaml"
-
+  "--conf" "spark.hadoop.datanucleus.schema.autoCreateAll=true" \
+  "--conf" "spark.hadoop.datanucleus.autoCreateSchema=true" \
+  "--conf" "spark.hadoop.datanucleus.fixedDatastore=false" \
+  "--conf" "spark.hadoop.datanucleus.schema.autoCreateTables=true"
 )
 
 # Add any extra configurations passed via --conf
@@ -133,9 +136,9 @@ spark-submit \
   --deploy-mode $DEPLOY_MODE \
   --name "IcebergLogAnalytics" \
   "${CONF_PARAMS[@]}" \
-  --py-files datalake_project.zip \
+  --py-files temp_submit.zip \
   --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.2,org.apache.hadoop:hadoop-aws:3.3.4 \
-  src/main.py \
+  main.py \
   --input-path "$INPUT_PATH" \
   --output-path "$OUTPUT_PATH" \
   --catalog-name "$CATALOG_NAME" \

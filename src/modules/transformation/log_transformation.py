@@ -1,12 +1,12 @@
 import logging
-import re
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import (col, date_format, lit, regexp_extract, udf,
+from pyspark.sql.functions import (col, date_format, udf,
                                    weekofyear)
 from pyspark.sql.types import StringType
 
-from src.config.config import Config
+from config import Config
+
 logger = logging.getLogger(__name__)
 
 
@@ -15,7 +15,8 @@ class LogTransformation:
         self.spark = spark
         self.config = config
 
-    def extract_device_type(self, user_agent):
+    @staticmethod
+    def extract_device_type(user_agent):
         """
         Extract device type from user agent string.
         """
@@ -47,23 +48,35 @@ class LogTransformation:
         # Create UDF for device type extraction
         extract_device_udf = udf(self.extract_device_type, StringType())
 
+        self.spark.udf.register("extract_device_type", self.extract_device_type, StringType())
+
         # Read raw logs
-        raw_logs = self.spark.table(self.config.raw_table_full_name)
+        self.spark.sql(f"SELECT * FROM {self.config.raw_table_full_name}").createOrReplaceTempView("raw_logs")
 
+        drop_table = f"DROP TABLE IF EXISTS {self.config.processed_table_full_name}"
+
+        self.spark.sql(drop_table)
         # Transform logs
-        transformed_logs = (
-            raw_logs.withColumn("device_type", extract_device_udf(col("user_agent")))
-            .withColumn("year", date_format(col("timestamp"), "yyyy"))
-            .withColumn("month", date_format(col("timestamp"), "MM"))
-            .withColumn("day", date_format(col("timestamp"), "dd"))
-            .withColumn("week", weekofyear(col("timestamp")))
-        )
+        # Transform logs using Spark SQL
+        transformation_sql = f"""
+                CREATE OR REPLACE TABLE {self.config.processed_table_full_name}
+                USING iceberg
+                LOCATION '{self.config.processed_table_path}'
+                PARTITIONED BY (year, month, day)
+                AS
+                SELECT
+                    *,
+                    extract_device_type(user_agent) AS device_type,
+                    date_format(timestamp, 'yyyy') AS year,
+                    date_format(timestamp, 'MM') AS month,
+                    date_format(timestamp, 'dd') AS day,
+                    weekofyear(timestamp) AS week
+                FROM raw_logs
+                """
+        self.spark.sql(transformation_sql)
 
-        # Create or replace the processed logs table
-        transformed_logs.write.format("iceberg").mode("overwrite").option(
-            "path", self.config.processed_table_path
-        ).partitionBy("year", "month", "day").saveAsTable(
-            self.config.processed_table_full_name
-        )
+        transformed_count = \
+        self.spark.sql(f"SELECT COUNT(*) as count FROM {self.config.processed_table_full_name}").collect()[0]["count"]
 
-        logger.info(f"Successfully transformed {transformed_logs.count()} logs")
+        logger.info(f"Successfully transformed {transformed_count} logs")
+

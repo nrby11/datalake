@@ -35,6 +35,8 @@ This project requires AWS credentials for accessing S3 storage, RDS, and Glue re
     "spark.hadoop.fs.s3a.access.key",""
     "spark.hadoop.fs.s3a.secret.key", ""
 ```
+![](./Architecture%20Diagram%20(1).png)
+
 ## Phase 1: Deploy AWS Infrastructure
 
 1. Initialize Terraform in the root directory:

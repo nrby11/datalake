@@ -32,7 +32,7 @@ MANIFEST
 *.manifest
 *.spec
 
-./infrastructre/terraform/terraform.tfvars
+infrastructre/terraform/terraform.tfvars
 
 # Installer logs
 pip-log.txt

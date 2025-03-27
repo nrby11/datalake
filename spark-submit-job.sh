@@ -87,9 +87,12 @@ spark-submit \
   --input-path "$INPUT_PATH" \
   --output-path "$OUTPUT_PATH" \
   --catalog-name "$CATALOG_NAME" \
+  --s3-bucket-name "$S3_BUCKET" \
   --database-name "$DATABASE_NAME" \
   --raw-table-name "$RAW_TABLE" \
-  --processed-table-name "$PROCESSED_TABLE"
+  --processed-table-name "$PROCESSED_TABLE" \
+  --access-keys "$ACCESS_KEYS" \
+  --secret-keys "$SECRET_KEYS"
 
 # Check job submission status
 if [ $? -eq 0 ]; then

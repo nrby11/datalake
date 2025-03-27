@@ -26,13 +26,13 @@ class SparkQueryCLI:
     def __init__(self, config=None):
         """Initialize the Spark Query CLI with optional config"""
         self.config = config
-        self.spark = self._init_spark_session()
+        self.spark = self._init_spark_session(self.config)
         self._welcome_message()
 
-    def _init_spark_session(self):
+    def _init_spark_session(self, config):
         """Initialize Spark session with Hive support"""
         # Use the existing utility function if available
-        return create_spark_session(local_mode=True)
+        return create_spark_session(config, local_mode=True )
 
 
     def _welcome_message(self):
@@ -189,9 +189,12 @@ def parse_arguments():
     """Parse CLI arguments"""
     parser = argparse.ArgumentParser(description='Spark Query CLI for Apache Iceberg')
     parser.add_argument('--input-path', help='S3 path to raw log files')
+    parser.add_argument("--access-keys", required=True, help="Access Keys for AWS")
+    parser.add_argument("--secret-keys", required=True, help="Secret keys for AWS")
     parser.add_argument('--output-path', help='S3 path for Iceberg tables')
     parser.add_argument('--catalog-name', default='hive_catalog', help='Iceberg catalog name')
     parser.add_argument('--database-name', default='logs_db', help='Database name')
+    parser.add_argument('--s3-bucket-name', help='S3 Bucket name')
     parser.add_argument('--raw-table-name', default='raw_logs', help='Raw logs table name')
     parser.add_argument('--processed-table-name', default='processed_logs', help='Processed logs table name')
     return parser.parse_args()
@@ -208,8 +211,12 @@ def main():
             output_path=args.output_path or "s3://iceberg-tables/",
             catalog_name=args.catalog_name,
             database_name=args.database_name,
+            s3_bucket_name=args.s3_bucket_name,
             raw_table_name=args.raw_table_name,
-            processed_table_name=args.processed_table_name
+            processed_table_name=args.processed_table_name,
+            access_key = args.access_keys,
+            secret_key = args.secret_keys,
+            metastore_path=f's3a://{args.s3_bucket_name}/hive/warehouse'
         )
 
     # Initialize CLI

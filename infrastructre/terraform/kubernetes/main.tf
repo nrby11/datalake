@@ -32,19 +32,19 @@ locals {
     access_key_config = <<-EOT
       <property>
           <name>fs.s3a.access.key</name>
-          <value>AKIA5QV57ZTOSESHYBIY</value>
+          <value>${var.aws_access_key}</value>
       </property>
       <property>
           <name>fs.s3a.secret.key</name>
-          <value>URbV7w24OOQcl1vmWloJ1o1mAMToXohCh1zvCEnj</value>
+          <value>${var.aws_secret_key}</value>
       </property>
     EOT
     spark_s3_config = <<-EOT
       # S3 configuration with access keys
       spark.hadoop.fs.s3a.endpoint=s3.amazonaws.com
       spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
-      spark.hadoop.fs.s3a.access.key=AKIA5QV57ZTOSESHYBIY
-      spark.hadoop.fs.s3a.secret.key=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
+      spark.hadoop.fs.s3a.access.key=${var.aws_access_key}
+      spark.hadoop.fs.s3a.secret.key=${var.aws_secret_key}
       spark.hadoop.fs.s3a.path.style.access=true
 
     EOT
@@ -62,11 +62,11 @@ locals {
     access_key_config = <<-EOT
         <property>
           <name>fs.s3a.access.key</name>
-          <value>AKIA5QV57ZTOSESHYBIY</value>
+          <value>${var.aws_access_key}</value>
         </property>
         <property>
             <name>fs.s3a.secret.key</name>
-            <value>URbV7w24OOQcl1vmWloJ1o1mAMToXohCh1zvCEnj</value>
+            <value>${var.aws_secret_key}</value>
         </property>
     EOT
     spark_s3_config = <<-EOT
@@ -74,8 +74,8 @@ locals {
       spark.hadoop.fs.s3a.endpoint=s3.amazonaws.com
       spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
       spark.hadoop.fs.s3a.path.style.access=true
-      spark.hadoop.fs.s3a.access.key=AKIA5QV57ZTOSESHYBIY
-      spark.hadoop.fs.s3a.secret.key=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
+      spark.hadoop.fs.s3a.access.key=${var.aws_access_key}
+      spark.hadoop.fs.s3a.secret.key=${var.aws_secret_key}
 
     EOT
     container_env = []

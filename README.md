@@ -1,8 +1,9 @@
 Below is the README.md content in a plain text format that you can copy easily:
 
 ---
-
+![](./Architecture%20Diagram%20(1).png)
 ```markdown
+
 # Data Lake Deployment Guide
 
 This guide walks you through deploying a data lake with Apache Spark, Hive Metastore, and Iceberg using a two-phase approach.
@@ -32,16 +33,19 @@ This project requires AWS credentials for accessing S3 storage, RDS, and Glue re
 3. Set these credentials in the project by searching for the following and replacing the key appropriately  :
 <name>fs.s3a.access.key</name>
 <name>fs.s3a.secret.key</name>
-    "spark.hadoop.fs.s3a.access.key",""
-    "spark.hadoop.fs.s3a.secret.key", ""
+3. Set these creds in spark-config.sh as well 
+   ACCESS_KEYS=""
+SECRET_KEYS=""
+
 ```
-![](./Architecture%20Diagram%20(1).png)
+
 
 ## Phase 1: Deploy AWS Infrastructure
 
-1. Initialize Terraform in the root directory:
+1. Initialize Terraform in the infrastructure/terraform directory:
 
    ```bash
+   cd infrastructure/terraform
    terraform init
    ```
 
@@ -74,25 +78,25 @@ This project requires AWS credentials for accessing S3 storage, RDS, and Glue re
 2. Create a file `kubernetes/terraform.tfvars` with the following content:
 
    ```hcl
-   eks_cluster_endpoint = "https://your-cluster-endpoint.eks.amazonaws.com"
-   eks_ca_data          = "your-base64-encoded-ca-data"
-   cluster_name         = "data-lake"
+   eks_cluster_endpoint = "<https://your-cluster-endpoint.eks.amazonaws.com>"
+   eks_ca_data          = "<your-base64-encoded-ca-data>"
+   cluster_name         = "<data-lake>"
    region               = "us-east-1"
    
    # Copy other variables from the root terraform.tfvars
    environment         = "dev"
    spark_namespace     = "spark"
-   s3_bucket_name      = "your-unique-data-lake-bucket-name"
+   s3_bucket_name      = "<your-unique-data-lake-bucket-name>"
    db_username         = "hiveuser"
-   db_password         = "YourStrongPassword123!"
+   db_password         = "<YourStrongPassword123!>"
    
    # From the RDS output
-   rds_endpoint        = "your-rds-endpoint.region.rds.amazonaws.com"
-   rds_port            = "5432"
-   rds_database        = "hivemetastore"
+   rds_endpoint        = "<your-rds-endpoint.region.rds.amazonaws.com>"
+   rds_port            = "<5432>"
+   rds_database        = "<hivemetastore>"
    
    # Other settings
-   aws_auth_method     = "iam_role"
+   aws_auth_method     = "keys"
    spark_worker_count  = 2
    spark_worker_memory = "2G"
    spark_worker_cores  = "2"
@@ -138,25 +142,22 @@ This project requires AWS credentials for accessing S3 storage, RDS, and Glue re
    kubectl logs -n spark -l app=spark-master
    ```
 
-3. If the Iceberg catalog setup job fails, check its logs:
-
-   ```bash
-   kubectl logs -n spark job/iceberg-catalog-setup
-   ```
-
 ## Running Spark Jobs and Using Spark CLI
 
 After deployment, follow these steps to run jobs and access the Spark CLI:
 
 ### Running a Spark Job
+## Important Setup Notes
+
+> **⚠️ IMPORTANT**: Update the AWS access keys in the `spark-config.sh` file before launching the cluster.
 
 Use the provided submission script by specifying your S3 paths and Kubernetes master:
 
 ```bash
 ./spark-submit-job.sh \
-  --input-path "s3a://your-bucket-name/test-data/Simulated Logs.log" \
-  --output-path "s3a://your-bucket-name/output" \
-  --k8s-master "https://your-eks-cluster-endpoint.eks.amazonaws.com" \
+  --input-path "s3a://datalake-nirbhay/test-data/Simulated Logs.log" \
+  --output-path "s3://datalake-nirbhay/output" \
+  --k8s-master "https://C94AB56F83FDE039E959A424C9BCCE89.gr7.us-east-1.eks.amazonaws.com" \
   --k8s-namespace "spark"
 ```
 
@@ -181,7 +182,11 @@ To use the Spark query CLI, set up port forwarding to access the services:
 3. With port forwarding active, run the Spark query CLI:
 
    ```bash
-   python spark_query_cli.py
+   python spark_query_cli.py 
+     --access-keys <> \
+     --secret-keys "<>" \
+     --input-path "s3a://datalake-nirbhay/test-data/Simulated Logs.log" \
+     --output-path "s3a://datalake-nirbhay/output"
    ```
 
 This setup allows you to interactively query your Iceberg tables and analyze data.

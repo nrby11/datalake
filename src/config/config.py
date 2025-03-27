@@ -1,5 +1,4 @@
-from dataclasses import dataclass, field
-from typing import List
+from dataclasses import dataclass
 
 
 @dataclass
@@ -8,15 +7,17 @@ class Config:
     output_path: str
     catalog_name: str
     database_name: str
+    s3_bucket_name: str
     raw_table_name: str
     processed_table_name: str
-    metastore_path: str = 's3a://terraform-20250326081517067100000004/hive/warehouse'
-
+    metastore_path: str
     partition_strategy: str = "dynamic"  # Options: "dynamic", "hourly", "daily"
     base_partitions: int = 2
     max_partitions: int = 50
     target_records_per_partition: int = 1000000  # Target 1M records per partition
     custom_partition_expr: str = None  # For custom partitioning expressions
+    access_key: str = None
+    secret_key: str = None
 
     @property
     def daily_ip_analytics_table(self):

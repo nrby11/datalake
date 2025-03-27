@@ -37,12 +37,13 @@ variable "spark_namespace" {
 variable "s3_bucket_name" {
   description = "Name of the S3 bucket for data storage"
   type        = string
+  default     = "datalake-test-bucket"
 }
 
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t1.micro"
+  default     = "db.t3.micro"
 }
 
 variable "db_allocated_storage" {

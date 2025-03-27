@@ -8,8 +8,7 @@ from config.config import Config
 logger = logging.getLogger(__name__)
 
 
-def create_spark_session(app_name="IcebergLogAnalytics", metastore_uri="thrift://hive-metastore:9083",
-    warehouse_dir="s3a://terraform-20250326081517067100000004/hive/warehouse",
+def create_spark_session(config, app_name="IcebergLogAnalytics", metastore_uri="thrift://hive-metastore:9083",
     local_mode=False):
     """
     Create and configure a Spark session for Iceberg operations.
@@ -19,13 +18,19 @@ def create_spark_session(app_name="IcebergLogAnalytics", metastore_uri="thrift:/
 
     Returns:
         SparkSession: Configured Spark session
+        :param config:
         :param local_mode:
         :param metastore_uri:
         :param app_name:
-        :param warehouse_dir:
     """
     logger.info(f"Creating Spark session with app name: {app_name}")
 
+    access_key=config.access_key
+
+    secret_key=config.secret_key
+
+
+    warehouse_dir = config.metastore_path
     if local_mode:
         metastore_uri = "thrift://localhost:9083"
 
@@ -47,8 +52,8 @@ def create_spark_session(app_name="IcebergLogAnalytics", metastore_uri="thrift:/
         .config("spark.executor.cores", "2") \
         .config("spark.executor.instances", "2") \
         .config("spark.kubernetes.executor.request.cores", "256m") \
-        .config("spark.hadoop.fs.s3a.access.key", "AKIA5QV57ZTOSESHYBIY") \
-        .config("spark.hadoop.fs.s3a.secret.key", "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") \
+        .config("spark.hadoop.fs.s3a.access.key", access_key) \
+        .config("spark.hadoop.fs.s3a.secret.key", secret_key) \
         .enableHiveSupport() \
         .getOrCreate()
     # Set log level

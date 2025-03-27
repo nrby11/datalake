@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Apache Iceberg Log Analytics")
     parser.add_argument("--input-path", required=True, help="S3 path to raw log files")
+    parser.add_argument("--access-keys", required=True, help="Access Keys for AWS")
+    parser.add_argument("--secret-keys", required=True, help="Secret keys for AWS")
     parser.add_argument(
         "--output-path", required=True, help="S3 path for Iceberg tables"
     )
@@ -26,6 +28,7 @@ def parse_arguments():
         "--catalog-name", default="hive", help="Iceberg catalog name"
     )
     parser.add_argument("--database-name", default="logs_db", help="Database name")
+    parser.add_argument("--s3-bucket-name", help="S3 Bucket name")
     parser.add_argument(
         "--raw-table-name", default="raw_logs", help="Raw logs table name"
     )
@@ -42,17 +45,21 @@ def main():
 
     # Create configuration
     config = Config(
-        input_path=args.input_path,
-        output_path=args.output_path,
-        catalog_name=args.catalog_name,
+        input_path= args.input_path,
+        output_path= args.output_path,
+        catalog_name= args.catalog_name,
+        s3_bucket_name = args.s3_bucket_name,
         database_name=args.database_name,
         raw_table_name=args.raw_table_name,
         processed_table_name=args.processed_table_name,
+        metastore_path=f's3a://{args.s3_bucket_name}/hive/warehouse',
+        access_key=args.access_keys,
+        secret_key=args.secret_keys
     )
 
     # Initialize Spark session
     logger.info("Initializing Spark session")
-    spark = create_spark_session()
+    spark = create_spark_session(config)
     iceberg = IcebergTableUtils(spark)
 
     try:

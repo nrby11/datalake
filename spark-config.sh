@@ -9,6 +9,9 @@ PROCESSED_TABLE="processed_logs"
 DEPLOY_MODE="cluster"
 K8S_NAMESPACE="spark"
 SRC_DIR="./src"
+ACCESS_KEYS="<TO BE FILLED>"
+SECRET_KEYS="<To BE FILLED>"
+
 
 # Spark configurations
 SPARK_CONF=(
@@ -28,8 +31,8 @@ SPARK_CONF=(
   "spark.hadoop.datanucleus.autoCreateSchema=true"
   "spark.hadoop.datanucleus.fixedDatastore=false"
   "spark.hadoop.datanucleus.schema.autoCreateTables=true"
-  "spark.hadoop.fs.s3a.access.key=AKIA5QV57ZTOSESHYBIY"
-  "spark.hadoop.fs.s3a.secret.key=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"
+  "spark.hadoop.fs.s3a.access.key=$ACCESS_KEYS"
+  "spark.hadoop.fs.s3a.secret.key=$SECRET_KEYS"
 )
 
 # Spark packages

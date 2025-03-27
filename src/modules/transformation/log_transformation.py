@@ -5,7 +5,7 @@ from pyspark.sql.functions import (col, date_format, udf,
                                    weekofyear)
 from pyspark.sql.types import StringType
 
-from config import Config
+from src.config.config import Config
 
 logger = logging.getLogger(__name__)
 

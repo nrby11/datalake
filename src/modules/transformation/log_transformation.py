@@ -1,4 +1,6 @@
 import logging
+
+from pyspark import StorageLevel
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, date_format, udf, weekofyear, hour
 from pyspark.sql.types import StringType
@@ -70,6 +72,7 @@ class LogTransformation:
                                 FROM raw_logs
                             """
         transformed_logs = self.spark.sql(transformed_logs_sql)
+        transformed_logs.persist(StorageLevel.MEMORY_AND_DISK)
         return transformed_logs
 
     @timeit
